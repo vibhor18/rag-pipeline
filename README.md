@@ -38,3 +38,93 @@ Results are combined using **Reciprocal Rank Fusion (RRF)** rather than linear s
 ## Setup
 
 ```bash
+git clone https://github.com/<your-username>/rag-pipeline.git
+cd rag-pipeline
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Configure API key
+cp .env.example .env
+# Edit .env and add your Mistral API key from https://console.mistral.ai/
+
+# Run the server
+uvicorn app.main:app --reload
+
+# Open http://localhost:8000 in your browser
+```
+
+## API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/ingest` | Upload one or more PDF files for ingestion |
+| `POST` | `/api/query` | Ask a question about uploaded documents |
+| `GET` | `/api/documents` | List all ingested documents |
+| `DELETE` | `/api/documents/{doc_id}` | Remove a specific document |
+| `DELETE` | `/api/documents` | Clear all documents |
+| `GET` | `/api/health` | Health check (document/chunk counts) |
+| `GET` | `/` | Chat UI |
+
+### Query example
+
+```bash
+curl -X POST http://localhost:8000/api/query \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What are the main findings?"}'
+```
+
+Response includes the answer, detected intent, citations with relevance scores, the transformed query, and any warnings (e.g., if hallucinated content was filtered).
+
+## Design Decisions
+
+**Recursive chunking over fixed-size windows** — Fixed-size chunking cuts text at arbitrary positions, often splitting sentences or paragraphs mid-thought. Recursive splitting tries paragraph boundaries first, then sentence boundaries, then word boundaries. This produces chunks that are semantically coherent, which improves retrieval quality.
+
+**BM25 + semantic hybrid over pure semantic search** — Embeddings are great at capturing meaning but can miss exact keyword matches. If a document mentions "TKA" (total knee arthroplasty) and the user searches for "TKA", a pure semantic search might rank it lower than a passage about "joint replacement." BM25 catches these exact matches. Combining both gives the best of both worlds.
+
+**RRF over linear score interpolation** — BM25 scores and cosine similarity scores are on completely different scales (BM25 can be 0-20+, cosine is 0-1). Naively doing `0.7 * cosine + 0.3 * bm25` would be dominated by whichever method produces larger numbers. RRF sidesteps this entirely by using rank positions: `score = 1/(k + rank)`. It's simple, robust, and has been shown to outperform linear combination in practice.
+
+**In-memory vector store** — No external database dependency. Numpy handles the linear algebra efficiently for demo-scale workloads (thousands of chunks). For production with 100K+ documents, you'd swap in FAISS or a dedicated vector database.
+
+**Similarity threshold for citations** — Rather than always returning an answer, the system checks if retrieved chunks are actually relevant (cosine similarity ≥ 0.35). If nothing passes the threshold, it says "insufficient evidence" instead of generating a potentially hallucinated answer.
+
+## Bonus Features
+
+- **Citations with similarity threshold** — Each answer includes source citations with filename, page number, and relevance score. Chunks below 0.35 cosine similarity are excluded
+- **Answer shaping** — Detects if the user wants a list, comparison, or general answer and switches prompt templates accordingly
+- **Hallucination filter** — Post-generation evidence check: a second LLM call verifies each sentence against the source material and strips unsupported claims
+- **PII refusal** — Regex-based detection of SSNs, credit card numbers, and passport-like patterns. Queries containing PII are refused before reaching the LLM
+- **Intent detection** — Greetings and chitchat are handled without unnecessary KB searches
+
+## Libraries Used
+
+| Library | Purpose |
+|---------|---------|
+| `fastapi` | Web framework |
+| `uvicorn` | ASGI server |
+| `httpx` | Async HTTP client for Mistral API |
+| `pymupdf` | PDF text extraction |
+| `numpy` | Vector math (cosine similarity, BM25 scoring) |
+| `python-multipart` | File upload handling |
+| `python-dotenv` | Environment variable management |
+| `jinja2` | Template engine (FastAPI dependency) |
+
+No LangChain. No LlamaIndex. No external vector database. All search and retrieval logic is built from scratch.
+
+## Production Improvements
+
+If scaling this beyond a demo, I would add:
+
+- **FAISS or pgvector** for vector search at scale (in-memory numpy won't handle millions of chunks)
+- **Persistent storage** with PostgreSQL so documents survive server restarts
+- **Streaming responses** via Server-Sent Events for better UX on longer answers
+- **Authentication** to protect the API and separate user document spaces
+- **More file types** — DOCX, TXT, HTML, markdown
+- **Chunk deduplication** across documents to avoid redundant retrieval
+- **Configurable models** — let users pick between Mistral models based on speed/quality tradeoff
+
+## Project Structure
