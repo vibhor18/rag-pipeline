@@ -1,6 +1,3 @@
-
-Copy
-
 """
 In-memory vector store with both semantic (cosine) and keyword (BM25) search.
  
