@@ -49,7 +49,7 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
 # Configure API key
-cp .env.example .env
+echo "MISTRAL_API_KEY=your_key_here" > .env 
 # Edit .env and add Mistral API key from https://console.mistral.ai/
 
 # Run the server
@@ -128,3 +128,23 @@ If scaling this beyond a demo, I would add:
 - **Configurable models** — let users pick between Mistral models based on speed/quality tradeoff
 
 ## Project Structure
+
+```
+rag-pipeline/
+├── .env.example          # Template for API keys
+├── .gitignore
+├── requirements.txt
+├── README.md
+├── app/
+│   ├── __init__.py
+│   ├── config.py          # All settings (API keys, thresholds, chunk sizes)
+│   ├── models.py          # Pydantic models and dataclasses
+│   ├── mistral_client.py  # Async Mistral API client with retry logic
+│   ├── ingestion.py       # PDF extraction and recursive chunking
+│   ├── vector_store.py    # In-memory store with cosine + BM25 + RRF
+│   ├── query_processing.py # Intent detection, PII check, query rewriting
+│   ├── generation.py      # Prompt templates, LLM generation, hallucination filter
+│   └── main.py            # FastAPI app and all endpoints
+└── static/
+    └── index.html         # Chat UI
+```
