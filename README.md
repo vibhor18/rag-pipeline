@@ -38,7 +38,7 @@ Results are combined using **Reciprocal Rank Fusion (RRF)** rather than linear s
 ## Setup
 
 ```bash
-git clone https://github.com/<your-username>/rag-pipeline.git
+git clone https://github.com/vibhor18/rag-pipeline.git
 cd rag-pipeline
 
 # Create virtual environment
@@ -50,7 +50,7 @@ pip install -r requirements.txt
 
 # Configure API key
 cp .env.example .env
-# Edit .env and add your Mistral API key from https://console.mistral.ai/
+# Edit .env and add Mistral API key from https://console.mistral.ai/
 
 # Run the server
 uvicorn app.main:app --reload
